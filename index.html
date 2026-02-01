@@ -2,9 +2,10 @@
 <html>
 <head>
   <title>Aggressive Pistol Game - BOSS EDITION</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { margin: 0; background: #111; overflow: hidden; cursor: crosshair; }
-    canvas { display: block; margin: 20px auto; background: #222; border: 4px solid #444; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+    canvas { display: block; margin: 20px auto; background: #222; border: 4px solid #444; }
   </style>
 </head>
 <body>
@@ -12,298 +13,191 @@
 <canvas id="game" width="800" height="600"></canvas>
 
 <script>
-  const canvas = document.getElementById("game");
-  const ctx = canvas.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-  // ================= ASSETS =================
-  const gameOverImg = new Image();
-  gameOverImg.src = './assets/Dogswag.jpg'; 
-  const playerImg = new Image();
-  playerImg.src = './assets/cute.jpg'; 
-  const enemyImg = new Image();
-  enemyImg.src = 'rehman.png'; 
-  const bossImg = new Image();
-  bossImg.src = 'amna.png';
-  const winImg = new Image();
-  winImg.src = 'win.jpg';
+/* ================= IMAGE PRELOAD (MOBILE FIX) ================= */
+const images = {};
+const imageSources = {
+  gameOver: "./Dogswag.jpg",
+  player: "./cute.jpg",
+  enemy: "./rehman.png",
+  boss: "./amna.png",
+  win: "./win.jpg"
+};
 
-  // ================= GAME STATE =================
-  let player = { x: 380, y: 280, size: 35, speed: 5 };
-  let mouse = { x: 0, y: 0 };
-  let keys = {};
-  let enemies = [];
-  let bullets = [];
-  let bonuses = [];
-  let bossProjectiles = []; 
-  let health = 10; 
-  let score = 0;
-  let gameOver = false;
-  let gameWin = false; 
-  let gunLevel = 1; 
-  let powerUpTimer = 0;
-  let autoFireTimer = 0;
+let imagesLoaded = 0;
+const totalImages = Object.keys(imageSources).length;
 
-  let bossActive = false;
-  let boss = null;
-  let bossAnnounceTimer = 0;
+for (let key in imageSources) {
+  images[key] = new Image();
+  images[key].src = imageSources[key];
+  images[key].onload = () => {
+    imagesLoaded++;
+    if (imagesLoaded === totalImages) startGame();
+  };
+  images[key].onerror = () => {
+    console.error("Image failed to load:", imageSources[key]);
+  };
+}
 
-  // ================= INPUT =================
-  window.addEventListener("mousemove", e => {
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
+/* ================= GAME START ================= */
+function startGame() {
+
+let player = { x: 380, y: 280, size: 35, speed: 5 };
+let mouse = { x: 0, y: 0 };
+let keys = {};
+let enemies = [];
+let bullets = [];
+let bonuses = [];
+let bossProjectiles = [];
+let health = 10;
+let score = 0;
+let gameOver = false;
+let gameWin = false;
+let gunLevel = 1;
+let powerUpTimer = 0;
+let autoFireTimer = 0;
+
+let bossActive = false;
+let boss = null;
+let bossAnnounceTimer = 0;
+
+/* ================= INPUT ================= */
+window.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+});
+
+document.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === "r" && (gameOver || gameWin)) location.reload();
+});
+
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener("mousedown", () => shoot());
+
+function shoot() {
+  if (gameOver || gameWin) return;
+  const cx = player.x + player.size / 2;
+  const cy = player.y + player.size / 2;
+  const angle = Math.atan2(mouse.y - cy, mouse.x - cx);
+
+  for (let i = 0; i < gunLevel; i++) {
+    const spread = (i - (gunLevel - 1) / 2) * 0.2;
+    bullets.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle + spread) * 12,
+      vy: Math.sin(angle + spread) * 12,
+      size: 7
+    });
+  }
+}
+
+function isColliding(a, b) {
+  return a && b &&
+    a.x < b.x + b.size &&
+    a.x + a.size > b.x &&
+    a.y < b.y + b.size &&
+    a.y + a.size > b.y;
+}
+
+function spawnEnemy() {
+  if (bossActive) return;
+  const angle = Math.random() * Math.PI * 2;
+  enemies.push({
+    x: player.x + Math.cos(angle) * 500,
+    y: player.y + Math.sin(angle) * 500,
+    size: 40,
+    speed: 1.5
+  });
+}
+
+function spawnBoss() {
+  bossActive = true;
+  bossAnnounceTimer = 180;
+  boss = { x: 350, y: 50, size: 100, hp: 100, maxHp: 100, vx: 2, vy: 1, shootTimer: 0 };
+  enemies = [];
+}
+
+function update() {
+  if (gameOver || gameWin) return;
+
+  if (keys["w"]) player.y -= player.speed;
+  if (keys["s"]) player.y += player.speed;
+  if (keys["a"]) player.x -= player.speed;
+  if (keys["d"]) player.x += player.speed;
+
+  if (score >= 30 && !bossActive && !boss) spawnBoss();
+
+  bullets.forEach((b, i) => {
+    b.x += b.vx;
+    b.y += b.vy;
+    if (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height)
+      bullets.splice(i, 1);
   });
 
-  document.addEventListener("keydown", e => {
-    keys[e.key.toLowerCase()] = true;
-    if (e.key.toLowerCase() === "r" && (gameOver || gameWin)) restartGame();
+  enemies.forEach((e, ei) => {
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const d = Math.hypot(dx, dy);
+    e.x += dx / d * e.speed;
+    e.y += dy / d * e.speed;
+
+    bullets.forEach((b, bi) => {
+      if (isColliding(b, e)) {
+        enemies.splice(ei, 1);
+        bullets.splice(bi, 1);
+        score++;
+        spawnEnemy();
+      }
+    });
   });
+}
 
-  document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-  canvas.addEventListener("mousedown", () => { if (!gameOver && !gameWin) shoot(); });
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  function shoot() {
-    const centerX = player.x + player.size / 2;
-    const centerY = player.y + player.size / 2;
-    const baseAngle = Math.atan2(mouse.y - centerY, mouse.x - centerX);
-
-    for (let i = 0; i < gunLevel; i++) {
-      const spread = (i - (gunLevel - 1) / 2) * 0.2;
-      bullets.push({
-        x: centerX, y: centerY,
-        vx: Math.cos(baseAngle + spread) * 12,
-        vy: Math.sin(baseAngle + spread) * 12,
-        size: 7
-      });
-    }
+  if (gameOver) {
+    ctx.drawImage(images.gameOver, canvas.width/2-150, 50, 300, 250);
+    return;
   }
 
-  // ================= HELPERS =================
-  function isColliding(a, b) {
-    if (!a || !b) return false; // Safety check for nulls
-    return a.x < b.x + b.size && a.x + a.size > b.x &&
-           a.y < b.y + b.size && a.y + a.size > b.y;
+  if (gameWin) {
+    ctx.drawImage(images.win, canvas.width/2-200, 50, 400, 300);
+    return;
   }
 
-  function spawnEnemy() {
-    if (bossActive || gameWin) return;
-    const dist = 500;
-    const angle = Math.random() * Math.PI * 2;
-    enemies.push({
-      x: (player.x + player.size/2) + Math.cos(angle) * dist,
-      y: (player.y + player.size/2) + Math.sin(angle) * dist,
-      size: 40,
-      speed: (1.5 + (score * 0.1)) * 0.9
-    });
+  if (bossAnnounceTimer > 0) {
+    ctx.fillStyle = "red";
+    ctx.font = "bold 60px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("BOSS FIGHT", canvas.width/2, canvas.height/2);
+    bossAnnounceTimer--;
   }
 
-  function spawnBoss() {
-    bossActive = true;
-    bossAnnounceTimer = 180; 
-    boss = {
-      x: 350, y: 50, size: 100,
-      hp: 100, maxHp: 100,
-      vx: 2, vy: 1,
-      shootTimer: 0
-    };
-    enemies = []; 
-  }
+  ctx.drawImage(images.player, player.x, player.y, player.size, player.size);
+  enemies.forEach(e => ctx.drawImage(images.enemy, e.x, e.y, e.size, e.size));
 
-  function spawnBonus() {
-    bonuses.push({
-      x: 50 + Math.random() * (canvas.width - 100),
-      y: 50 + Math.random() * (canvas.height - 100),
-      size: 25,
-      life: 400,
-      type: Math.random() > 0.5 ? 'spread' : 'auto'
-    });
-  }
+  ctx.fillStyle = "yellow";
+  bullets.forEach(b => ctx.fillRect(b.x, b.y, b.size, b.size));
 
-  function restartGame() {
-    player = { x: 380, y: 280, size: 35, speed: 5 };
-    enemies = []; bullets = []; bonuses = []; bossProjectiles = [];
-    health = 10; score = 0; gunLevel = 1; powerUpTimer = 0; autoFireTimer = 0;
-    gameOver = false; gameWin = false; bossActive = false; boss = null;
-    spawnEnemy();
-  }
+  ctx.fillStyle = "white";
+  ctx.fillText("HP: " + health, 20, 30);
+  ctx.fillText("KILLS: " + score, 20, 55);
+}
 
-  // ================= UPDATE =================
-  function update() {
-    if (gameOver || gameWin) return;
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
 
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
-
-    player.x = Math.max(0, Math.min(canvas.width - player.size, player.x));
-    player.y = Math.max(0, Math.min(canvas.height - player.size, player.y));
-
-    if (powerUpTimer > 0) { powerUpTimer--; if (powerUpTimer === 0) gunLevel = 1; }
-    if (autoFireTimer > 0) { autoFireTimer--; if (autoFireTimer % 8 === 0) shoot(); }
-
-    if (score >= 30 && !bossActive && !boss) spawnBoss();
-
-    bullets.forEach((b, i) => {
-      b.x += b.vx; b.y += b.vy;
-      if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
-    });
-
-    bossProjectiles.forEach((fp, fpi) => {
-      fp.x += fp.vx; fp.y += fp.vy;
-      if (isColliding(player, fp)) {
-        health--; bossProjectiles.splice(fpi, 1);
-        if (health <= 0) gameOver = true;
-      }
-      bullets.forEach((b, bi) => {
-        if (isColliding(b, fp)) {
-          bossProjectiles.splice(fpi, 1);
-          bullets.splice(bi, 1);
-        }
-      });
-    });
-
-    if (bossActive && boss) {
-      boss.x += boss.vx; boss.y += boss.vy;
-      if (boss.x <= 0 || boss.x >= canvas.width - boss.size) boss.vx *= -1;
-      if (boss.y <= 0 || boss.y >= 150) boss.vy *= -1;
-
-      boss.shootTimer++;
-      if (boss.shootTimer > 210) { 
-        const angle = Math.atan2((player.y + player.size/2) - (boss.y + boss.size/2), (player.x + player.size/2) - (boss.x + boss.size/2));
-        bossProjectiles.push({
-          x: boss.x + boss.size/2, y: boss.y + boss.size/2,
-          vx: Math.cos(angle) * 5, vy: Math.sin(angle) * 5, size: 25
-        });
-        boss.shootTimer = 0;
-      }
-
-      bullets.forEach((b, bi) => {
-        if (!boss) return; // CRITICAL FIX: Don't check if boss is already dead
-        if (isColliding(b, boss)) {
-          boss.hp--; bullets.splice(bi, 1);
-          if (boss.hp <= 0) { 
-             bossActive = false; 
-             boss = null; 
-             score += 100; 
-             gameWin = true; 
-          }
-        }
-      });
-    }
-
-    enemies.forEach((en, ei) => {
-      const dx = (player.x + player.size/2) - (en.x + en.size/2);
-      const dy = (player.y + player.size/2) - (en.y + en.size/2);
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      en.x += (dx / dist) * en.speed;
-      en.y += (dy / dist) * en.speed;
-
-      if (isColliding(player, en)) {
-        health--; enemies.splice(ei, 1);
-        if (health <= 0) gameOver = true;
-      }
-      bullets.forEach((b, bi) => {
-        if (isColliding(b, en)) {
-          enemies.splice(ei, 1); bullets.splice(bi, 1);
-          score++; spawnEnemy();
-          if (score % 3 === 0) spawnEnemy();
-        }
-      });
-    });
-
-    bonuses.forEach((bn, bi) => {
-      bn.life--; if (bn.life <= 0) bonuses.splice(bi, 1);
-      bullets.forEach((b, bui) => {
-        if (isColliding(b, bn)) {
-          if (bn.type === 'auto') autoFireTimer = 600;
-          else { gunLevel = Math.floor(Math.random() * 3) + 2; powerUpTimer = 400; }
-          bonuses.splice(bi, 1); bullets.splice(bui, 1);
-        }
-      });
-    });
-
-    if (Math.random() < 0.006) spawnBonus();
-    if (!bossActive && enemies.length < 2 && !gameWin) spawnEnemy();
-  }
-
-  // ================= DRAW =================
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (gameOver) {
-      ctx.drawImage(gameOverImg, canvas.width/2 - 150, 40, 300, 250);
-      ctx.fillStyle = "#ff0000"; ctx.font = "bold 50px Arial"; ctx.textAlign = "center";
-      ctx.fillText("Mar Gye BC Ouchhh", canvas.width/2, 350);
-      ctx.fillStyle = "white"; ctx.font = "24px Arial";
-      ctx.fillText("Score: " + score + " - Press R to Restart", canvas.width/2, 400);
-      return;
-    }
-
-    if (gameWin) {
-      ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(0,0,canvas.width, canvas.height);
-      ctx.drawImage(winImg, canvas.width/2 - 200, 40, 400, 300);
-      
-      // Pulsing Victory Text
-      const pulse = Math.sin(Date.now() / 200) * 5;
-      ctx.fillStyle = "#00ff00"; ctx.font = "bold " + (50 + pulse) + "px Arial"; ctx.textAlign = "center";
-      ctx.shadowBlur = 15; ctx.shadowColor = "white";
-      ctx.fillText("VICTORY!", canvas.width/2, 410);
-      ctx.shadowBlur = 0;
-
-      ctx.fillStyle = "white"; ctx.font = "24px Arial";
-      ctx.fillText("Final Score: " + score + " - Press R to Restart", canvas.width/2, 460);
-      return;
-    }
-
-    if (bossAnnounceTimer > 0) {
-      ctx.fillStyle = "red"; ctx.font = "bold 70px Arial"; ctx.textAlign = "center";
-      ctx.fillText("BOSS FIGHT", canvas.width/2, canvas.height/2);
-      bossAnnounceTimer--;
-    }
-
-    ctx.drawImage(playerImg, player.x, player.y, player.size, player.size);
-    const centerX = player.x + player.size / 2;
-    const centerY = player.y + player.size / 2;
-    const angle = Math.atan2(mouse.y - centerY, mouse.x - centerX);
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate(angle);
-    ctx.fillStyle = (gunLevel > 1 || autoFireTimer > 0) ? "magenta" : "#999";
-    ctx.fillRect(18, -5, 25, 10); 
-    ctx.restore();
-
-    if (bossActive && boss) {
-      ctx.drawImage(bossImg, boss.x, boss.y, boss.size, boss.size);
-      ctx.fillStyle = "#444"; ctx.fillRect(boss.x, boss.y - 30, boss.size, 12);
-      ctx.fillStyle = "red"; ctx.fillRect(boss.x, boss.y - 30, (boss.hp / boss.maxHp) * boss.size, 12);
-    }
-
-    bossProjectiles.forEach(fp => {
-      ctx.fillStyle = "orange"; ctx.beginPath();
-      ctx.arc(fp.x, fp.y, fp.size/2, 0, Math.PI*2); ctx.fill();
-    });
-
-    bonuses.forEach(bn => {
-      ctx.fillStyle = bn.type === 'auto' ? "#ff00ff" : "#00ff00";
-      ctx.fillRect(bn.x, bn.y, bn.size, bn.size);
-    });
-
-    ctx.fillStyle = "yellow";
-    bullets.forEach(b => ctx.fillRect(b.x, b.y, b.size, b.size));
-    enemies.forEach(e => ctx.drawImage(enemyImg, e.x, e.y, e.size, e.size));
-
-    ctx.textAlign = "left"; ctx.fillStyle = "white"; ctx.font = "bold 20px Arial";
-    ctx.fillText("HP: " + health, 20, 35);
-    ctx.fillText("KILLS: " + score, 20, 65);
-  }
-
-  function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
-  spawnEnemy();
-  gameLoop();
+spawnEnemy();
+loop();
+}
 </script>
 
 </body>
-
 </html>
