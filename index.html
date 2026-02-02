@@ -18,19 +18,47 @@
       font-family: Arial, sans-serif;
     }
 
-    /* Standard Canvas Styling */
     canvas { 
       display: block; 
       background: #222; 
-      border: 2px solid #444; 
+      border: 4px solid #444; 
       box-shadow: 0 0 20px rgba(0,0,0,0.5); 
-      /* Ensures the game scales but keeps its ratio */
       max-width: 95vw;
       max-height: 95vh;
       object-fit: contain;
     }
 
-    /* Screen rotation prompt */
+    /* The Play Again Button Styling */
+    #play-again-btn {
+      display: none; /* Hidden by default */
+      position: absolute;
+      top: 75%; /* Positioned below the main text */
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 15px 40px;
+      font-size: 24px;
+      font-weight: bold;
+      color: white;
+      background: #ff0000;
+      border: 4px solid #fff;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+      animation: pulse 1.5s infinite;
+      z-index: 1000;
+    }
+
+    #play-again-btn:active {
+      background: #b30000;
+      transform: translate(-50%, -50%) scale(0.95);
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+      70% { box-shadow: 0 0 0 20px rgba(255, 255, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+    }
+
     #rotate-overlay {
       display: none;
       position: fixed;
@@ -44,7 +72,6 @@
       text-align: center;
     }
 
-    /* Only show overlay when phone is in portrait mode */
     @media (orientation: portrait) {
       #rotate-overlay { display: flex; }
     }
@@ -58,11 +85,14 @@
   <p>Please turn your phone sideways to play!</p>
 </div>
 
+<button id="play-again-btn" onclick="restartGame()">PLAY AGAIN</button>
+
 <canvas id="game" width="800" height="400"></canvas>
 
 <script>
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
+  const playAgainBtn = document.getElementById("play-again-btn");
 
   // ================= ASSETS =================
   const gameOverImg = new Image();
@@ -91,7 +121,6 @@ winImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/68stSlACEQAAAAE
   let gunLevel = 1; 
   let powerUpTimer = 0;
   let autoFireTimer = 0;
-
   let bossActive = false;
   let boss = null;
   let bossAnnounceTimer = 0;
@@ -129,14 +158,10 @@ winImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/68stSlACEQAAAAE
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     for (let t of e.changedTouches) {
       let tx = (t.clientX - rect.left) * scaleX;
       let ty = (t.clientY - rect.top) * scaleY;
-
-      if (joystickL.active && t.identifier === joystickL.id) {
-        joystickL.currX = tx; joystickL.currY = ty;
-      }
+      if (joystickL.active && t.identifier === joystickL.id) { joystickL.currX = tx; joystickL.currY = ty; }
       if (joystickR.active && t.identifier === joystickR.id) {
         joystickR.currX = tx; joystickR.currY = ty;
         mouse.x = (player.x + player.size/2) + (joystickR.currX - joystickR.startX);
@@ -150,8 +175,6 @@ winImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/68stSlACEQAAAAE
       if (joystickL.active && t.identifier === joystickL.id) joystickL.active = false;
       if (joystickR.active && t.identifier === joystickR.id) joystickR.active = false;
     }
-    // Tap to restart on mobile
-    if ((gameOver || gameWin)) restartGame();
   });
 
   // ================= INPUT =================
@@ -206,11 +229,15 @@ winImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/68stSlACEQAAAAE
     enemies = []; bullets = []; bonuses = []; bossProjectiles = [];
     health = 10; score = 0; gunLevel = 1; powerUpTimer = 0; autoFireTimer = 0;
     gameOver = false; gameWin = false; bossActive = false; boss = null;
+    playAgainBtn.style.display = "none"; // Hide button on restart
     spawnEnemy();
   }
 
   function update() {
-    if (gameOver || gameWin) return;
+    if (gameOver || gameWin) {
+      playAgainBtn.style.display = "block"; // Show button when game ends
+      return;
+    }
 
     let moveX = 0, moveY = 0;
     if (keys["w"]) moveY -= 1; if (keys["s"]) moveY += 1;
@@ -290,7 +317,7 @@ winImg.src = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/68stSlACEQAAAAE
       ctx.fillStyle = gameOver ? "red" : "#0f0"; ctx.font = "bold 40px Arial"; ctx.textAlign="center";
       ctx.fillText(gameOver ? "Mar Gye BC Ouchhh" : "VICTORY!", 400, 250);
       ctx.fillStyle = "white"; ctx.font = "20px Arial";
-      ctx.fillText("Final Score: " + score + " - Tap Screen to Restart", 400, 300);
+      ctx.fillText("Final Score: " + score, 400, 300);
       return;
     }
 
